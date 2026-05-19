@@ -4,7 +4,7 @@
 
 # AWS Security Baseline & Guardrail Architecture
 
-A multi-account AWS Organization implementing security guardrails: SCPs, centralized logging, and (in Week 2) detection services with delegated administration.
+A multi-account AWS Organization implementing security guardrails: SCPs, centralized logging, and (in Phase 2) detection services with delegated administration.
 
 This treats security as reliability.  Controls are preventative wherever possible, detective where necessary, and deferred where they would generate unactionable noise or cost.
 
@@ -34,10 +34,10 @@ This treats security as reliability.  Controls are preventative wherever possibl
 
 ## Design decisions
 **Identity Center with built-in directory**
- - Fits the multi-account model better
- - Centralizes human access at the organization level
- - Allows granting permission sets to OUs rather that provisioning users per account
 
+Alternatives considered: IAM users per account, Identity Center federated to an external IdP.
+
+Chose Identity Center with the built-in directory because IAM users in each account create credential sprawl that doesn't scale beyond two or three accounts.  An external IdP adds infrastructure complexity and cost that are not justified for an environment with one human user.  Identity Center centralizes human access at the org level and lets permission sets be assigned to accounts, which is the pattern that would extend cleanly to a production environment.
 ## How this was built
 
 ## Reproducing this environment
