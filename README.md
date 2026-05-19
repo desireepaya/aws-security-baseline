@@ -1,14 +1,18 @@
+> [!NOTE]
+> STATUS: Phase 1 build in progress.\
+> Infrastructure deploys targeted for Friday, May 22; documentation sections populate as the build progresses.
+
 # AWS Security Baseline & Guardrail Architecture
 
-A mutli-account AWS Organization implementing security guardrails: SCPs, centralized logging, and (in Week 2) detection services with delegated administration.
+A multi-account AWS Organization implementing security guardrails: SCPs, centralized logging, and (in Week 2) detection services with delegated administration.
 
 This treats security as reliability.  Controls are preventative wherever possible, detective where necessary, and deferred where they would generate unactionable noise or cost.
 
 ## Architecture
-<img width="816" height="680" alt="guardrail_scope_diagram" src="https://github.com/user-attachments/assets/15b03698-3dab-43aa-bc94-72c2a2ab342e" />
+![Architecture](docs/images/guardrail_scope_diagram.png)
 
 ## Scope
-### Week 1
+### Phase 1
 - AWS Organization with management account and one workload account
 - One Workloads OU
 - Service Control Policies applied at the OU level
@@ -16,7 +20,7 @@ This treats security as reliability.  Controls are preventative wherever possibl
 - KMS-encrypted S3 bucket for log storage
 - Terraform with remote state
 
-### Week 2
+### Phase 2
 - Identity Center for human access, with permission sets
 - GuardDuty with delegated administration
 - AWS Config with organization aggregator
@@ -29,6 +33,10 @@ This treats security as reliability.  Controls are preventative wherever possibl
 **WAF, Shield Advanced, Network Firewall** -- Advanced controls not justified by this portfolio's threat model.
 
 ## Design decisions
+**Identity Center with built-in directory**
+ - Fits the multi-account model better
+ - Centralizes human access at the organization level
+ - Allows granting permission sets to OUs rather that provisioning users per account
 
 ## How this was built
 
