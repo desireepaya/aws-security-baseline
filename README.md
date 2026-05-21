@@ -38,6 +38,10 @@ This treats security as reliability.  Controls are preventative wherever possibl
 Alternatives considered: IAM users per account, Identity Center federated to an external IdP.
 
 Chose Identity Center with the built-in directory because IAM users in each account create credential sprawl that doesn't scale beyond two or three accounts.  An external IdP adds infrastructure complexity and cost that are not justified for an environment with one human user.  Identity Center centralizes human access at the org level and lets permission sets be assigned to accounts, which is the pattern that would extend cleanly to a production environment.
+
+**DynamoDB lock table for state locking**
+
+Alternatives considered: Newer versions of Terraform support native S3-based locking with `use_lockfile`, replacing the use of DynamoDB.  Chose to keep the DynamoDB pattern because it matches what production environments likely run today while demonstrating the distributed-systems reasoning behind state locking.  A future upgrade would migrate to `use_lockfile` and decommission the DynamoDB table.
 ## How this was built
 
 ## Reproducing this environment
