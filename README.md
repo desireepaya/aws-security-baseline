@@ -49,7 +49,7 @@ Alternatives considered: Newer versions of Terraform support native S3-based loc
 Chose to keep the DynamoDB pattern because it matches what production environments likely run today while demonstrating the distributed-systems reasoning behind state locking.  A future upgrade would migrate to `use_lockfile` and decommission the DynamoDB table.
 
 ## How this was built
-**Environment Bootstrap**
+### Environment Bootstrap
 
 Before I could create any organization-level resources, Terraform needed somewhere to write state, ideally with locking to prevent concurrent runs from corrupting it.  This creates a chicken-and-egg problem: the standard pattern is remote state in S3 with a DynamoDB lock table.  With a new environment, those resources don't yet exist and Terraform won't init against a bucket it can't reach.
 
@@ -59,11 +59,18 @@ One deferred decision worth mentioning: Terraform recently introduced native S3 
 
 For authentication during the bootstrap phase, I created an IAM user with scoped admin permissions to the sandbox account.  Identity Center is the production pattern and is scoped for Phase 2.  It requires the organization management account to exist first, which is the bootstrap work of Phase 1.
 
-With state management and authentication in place, the next step is to create the AWS Organization itself.
+With state management and authentication in place, the next step creates the AWS Organization itself.
 
+### AWS Organization
+
+I decided to use an organizational unit (OU) because I wanted this project to demonstrate production patterns.  The work to attach SCPs to a single-account OU is the same as an OU with dozens of accounts, and this approach builds that muscle memory.
+
+I also created a separate sandbox account for running workloads instead of having them run in the management account.  This might seem like unnecessary overhead, but that obscures two important implementation details.  First, SCPs don't apply to the management account, so I'd need a separate account to demonstrate SCP attachment anyway.  Second, the management account is for org administration, not workloads.  Running workloads there creates a blast-radius problem, where a compromised workload would threaten org administration itself.
+
+Here is the final state after applying all changes in Terraform:
+
+![Organizations console screenshot](docs/images/organizations-console.png)
 
 ## Reproducing this environment
 
 ## Repo structure
-
- 
