@@ -1,6 +1,6 @@
 > [!NOTE]
 > **Status**: Phase 1 build in progress\
-> **May 29 target**: Governance layer complete
+> **Phase 1 Completion Target**: June 3, 2026
 
 # AWS Security Baseline & Guardrail Architecture
 
@@ -17,11 +17,19 @@ This treats security as reliability.  Controls are preventative wherever possibl
 - AWS Organization with management account and one workload account
 - One Workloads OU
 - Terraform with remote state
+- Service Control Policies applied at the OU level
+- KMS-encrypted S3 bucket for log storage
+
+#### Phase 1 governance layer
+The focus of this section was establishing a secure foundation for this environment.  With the completion of SCP, KMS, and S3 work, I now have the preventative controls in place at the organization level.
+What this enables:
+- **Region containment:** Prevents access or provisioning of resources outside of the target region.
+- **CloudTrail protection:** An SCP prevents member accounts from disabling or deleting CloudTrail, protecting the org trail once it's deployed.
+- **Storage hardened for the org trail:** KMS encryption at rest, bucket versioning, and ownership enforcement maintain log integrity once logs flow.
+- **Controls verified:** Each control was verified against its intended behavior using a documented test matrix.
 
 #### In progress
-- Service Control Policies applied at the OU level
 - Organization-level CloudTrail trail
-- KMS-encrypted S3 bucket for log storage
 
 ### Phase 2
 - Identity Center for human access, with permission sets
