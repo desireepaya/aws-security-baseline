@@ -60,10 +60,27 @@ Verify the management account can assume the admin role in the sandbox account b
 - **Control:** SCP - Deny CloudTrail tampering
 - **Test action:** Sandbox attempts to read a trail.
   ```bash
-  aws cloudtrail describe-trails --trail-name-list portfolio-org-trail --profile sandbox
+  aws cloudtrail describe-trails --profile sandbox
   ```
 - **Expected:** Success, command returns trail.
-- **Actual:** [deferred -- requires a valid trail]
+- **Actual:** :white_check_mark: Command returned trail.
+  ```bash
+  "trailList": [
+        {
+            "Name": "portfolio-org-trail",
+            "S3BucketName": "dp-cloudtrail-logs-933613018572",
+            "IncludeGlobalServiceEvents": true,
+            "IsMultiRegionTrail": true,
+            "HomeRegion": "us-west-2",
+            "TrailARN": "arn:aws:cloudtrail:us-west-2:933613018572:trail/portfolio-org-trail",
+            "LogFileValidationEnabled": true,
+            "KmsKeyId": "arn:aws:kms:us-west-2:933613018572:key/3ce9748a-ecd9-46da-9c3c-2a5eca5496fd",
+            "HasCustomEventSelectors": false,
+            "HasInsightSelectors": false,
+            "IsOrganizationTrail": true
+        }
+    ]
+```
 
 **Test 1.4: Management account attempts to stop logging**
 - **Control:** SCP - Deny CloudTrail tampering
@@ -159,14 +176,14 @@ Verify the management account can assume the admin role in the sandbox account b
 
 **Test 3.3: Confirm the key policy**
 - **Control:** KMS Enabled for CloudTrail
-- **Test action:** Management account confirms key policy is populated with actual ARN values.
+- **Test action:** Management account confirms key policy is populated with actual ARN value.
   ```bash
   aws kms get-key-policy --key-id [KeyId from Test 3.1] --policy-name default --profile portfolio
   ```
-- **Expected:** Returns the policy JSON with `aws:SourceArn` and `kms:EncryptionContext` rendering actual ARN instead of variable placeholder.
-- **Actual:** :white_check_mark: Both values rendered as expected.
+- **Expected:** Returns the policy JSON with `aws:SourceArn` rendering actual ARN instead of variable placeholder.
+- **Actual:** :white_check_mark: ARN rendered as expected.
   ```bash
-  "aws:SourceArn\" : \"arn:aws:cloudtrail:us-west-2:933613018572:trail/portfolio-org-trail\",\n        \"kms:EncryptionContext:aws:cloudtrail:arn\" : \"arn:aws:cloudtrail:us-west-2:933613018572:trail/portfolio-org-trail\
+  "aws:SourceArn\" : \"arn:aws:cloudtrail:us-west-2:933613018572:trail/portfolio-org-trail\",
   ```
 
 **Test 3.4: Confirm rotation is enabled**
@@ -227,6 +244,7 @@ Verify the management account can assume the admin role in the sandbox account b
       {
         "ObjectOwnership": "BucketOwnerEnforced"
       }
+    ]
   ```
 
 **Test 4.4: Bucket versioning is enabled**
@@ -237,25 +255,61 @@ Verify the management account can assume the admin role in the sandbox account b
   ```
 - **Expected:** Returns `Status: Enabled`.
 - **Actual:** :white_check_mark: Expected value returned.
-```bash
-"Status": "Enabled"
-```
+  ```bash
+  "Status": "Enabled"
+  ```
 
-**Test 4.5: Confirm CloudTrail write access**
-- **Control:** S3 BucketPolicy
+**Test 4.5: Confirm CloudTrail bucket policy applied**
+- **Control:** S3 Bucket Policy
 - **Test action:** Management account confirms policy variables rendered as expected.
   ```bash
   aws s3api get-bucket-policy --bucket dp-cloudtrail-logs-933613018572 --profile portfolio
   ```
 - **Expected:** Three statements (`CloudTrailGetBucketAcl`, `CloudTrailPutObject`, `DenyInsecureTransport`) with ARNs rendered.
-- **Actual:** :white_check_box: Three statements present. All three template variables rendered correctly: bucket_arn, org_id as o-60rf2ejetx in PutObject path, trail_arn in both SourceArn conditions.
+- **Actual:** :white_check_mark: Three statements present. All three template variables rendered correctly: bucket_arn, org_id as o-60rf2ejetx in PutObject path, trail_arn in both SourceArn conditions.
 
 ### CloudTrail trail (end-to-end)
-**Test .: **
-- **Control:** 
-- **Test action:** 
+**Test 5.1: Confirm CloudTrail trail is logging **
+- **Control:** Terraform created trail
+- **Test action:** Management account queries for organization trail ARN, gets status.
   ```bash
-  
+  aws cloudtrail describe-trails --profile portfolio
+  aws cloudtrail get-trail-status --name arn:aws:cloudtrail:us-west-2:933613018572:trail/portfolio-org-trail --profile portfolio
   ```
-- **Expected:** 
-- **Actual:** [TBD]
+- **Expected:** Returns `"IsLogging": true`
+- **Actual:** :white_check_mark: Returned `"IsLogging": true`
+
+**Test 5.2: Confirm CloudTrail can write to the bucket**
+- **Control:** End-to-end logs delivery
+> [!TIP]
+> Allow 5-10 min after trail creation to run this test.
+- **Test action:** Management account verifies test trail written to target bucket.
+  ```bash
+  aws s3api list-objects-v2 --bucket dp-cloudtrail-logs-933613018572 --prefix AWSLogs/ --profile portfolio
+  ```
+- **Expected:** Returns JSON with log objects.
+- **Actual:** :white_check_mark: Returned multiple log entries.
+
+**Test 5.3: Confirm trail objects are encrypted with KMS**
+- **Control:** S3 Enforce KMS bucket encryption
+- **Test action:** Management account verifies bucket object is encrypted with KMS key.
+  ```bash
+  aws s3api head-object --bucket dp-cloudtrail-logs-933613018572 --key "AWSLogs/o-60rf2ejetx/933613018572/CloudTrail/us-west-2/2026/06/03/933613018572_CloudTrail_us-west-2_20260603T0630Z_1mzOfXjDxCUcAucm.json.gz" --profile portfolio
+  ```
+- **Expected:** Returns `SSEKMSKeyId` that matches the CloudTrail KMS key ARN (...496fd).
+- **Actual:** :white_check_mark: Returned matching value:
+  ```bash
+   "SSEKMSKeyId": "arn:aws:kms:us-west-2:933613018572:key/3ce9748a-ecd9-46da-9c3c-2a5eca5496fd"
+   ```
+
+**Test 5.4: Policy prevents insecure transport**
+- **Control:** S3 Deny Insecure Transport
+- **Test action:** Management account tries to write to the bucket over insecure connection.
+  ```bash
+  aws s3api put-object --bucket dp-cloudtrail-logs-933613018572 --key transport-test.txt --endpoint-url http://s3.us-west-2.amazonaws.com --profile portfolio
+  ```
+- **Expected:** `AccessDenied` from the bucket policy `DenyInsecureTransport`.
+- **Actual:** :x: Request was reject, but with `InvalidArgument` instead of `AccessDenied`.  This is likely a response from S3's service-level requirement that KMS writes use TLS.  The policy is applied but can't be verified without removing default encryption to isolate it.
+  ```bash
+  aws: [ERROR]: An error occurred (InvalidArgument) when calling the PutObject operation: Requests specifying Server Side Encryption with AWS KMS managed keys must be made over a secure connection.
+  ```

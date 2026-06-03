@@ -22,7 +22,10 @@
         "Service": "cloudtrail.amazonaws.com"
       },
       "Action": "s3:PutObject",
-      "Resource": "${bucket_arn}/AWSLogs/${org_id}/*",
+      "Resource": [
+        "${bucket_arn}/AWSLogs/${org_id}/*",
+        "${bucket_arn}/AWSLogs/${account_id}/*"
+      ],
       "Condition": {
         "StringEquals": {
           "aws:SourceArn": "${trail_arn}",

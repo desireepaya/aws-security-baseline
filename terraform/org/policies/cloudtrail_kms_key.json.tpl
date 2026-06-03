@@ -24,8 +24,7 @@
             "Resource": "*",
             "Condition": {
                 "StringEquals": {
-                    "aws:SourceArn": "${trail_arn}",
-                    "kms:EncryptionContext:aws:cloudtrail:arn": "${trail_arn}"
+                    "aws:SourceArn": "${trail_arn}"
                 }
             }
         }

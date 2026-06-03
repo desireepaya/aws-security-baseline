@@ -14,6 +14,7 @@ resource "aws_s3_bucket_policy" "allow_cloudtrail_bucket_access" {
     bucket_arn = aws_s3_bucket.cloudtrail_org_logs.arn
     trail_arn  = local.trail_arn
     org_id     = aws_organizations_organization.this.id
+    account_id = data.aws_caller_identity.current.account_id
   })
 }
 # is encrypted
