@@ -7,6 +7,10 @@ terraform {
     }
   }
 
+  # NOTE: this backend block was added AFTER the initial bootstrap apply.
+  # On a clean rebuild, comment this out, apply to create the bucket and 
+  # DynamoDB table with local state.  Then uncomment and run `terraform init`
+  # to migrate state to the remote backend.  See README "Reproducing this environment".
   backend "s3" {
     bucket         = "dp-tfstate-aws-security-baseline"
     key            = "bootstrap/terraform.tfstate"
