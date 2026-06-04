@@ -1,6 +1,5 @@
 > [!NOTE]
-> **Status**: Phase 1 build in progress\
-> **Phase 1 Completion Target**: June 3, 2026
+> **Status**: Phase 1 build complete
 
 # AWS Security Baseline & Guardrail Architecture
 
@@ -19,6 +18,7 @@ This treats security as reliability.  Controls are preventative wherever possibl
 - Terraform with remote state
 - Service Control Policies applied at the OU level
 - KMS-encrypted S3 bucket for log storage
+- Organization-level CloudTrail trail
 
 #### Phase 1 governance layer
 The focus of this section was establishing a secure foundation for this environment.  With the completion of SCP, KMS, and S3 work, I now have the preventative controls in place at the organization level.
@@ -26,10 +26,7 @@ What this enables:
 - **Region containment:** Prevents access or provisioning of resources outside of the target region.
 - **CloudTrail protection:** An SCP prevents member accounts from disabling or deleting CloudTrail, protecting the org trail once it's deployed.
 - **Storage hardened for the org trail:** KMS encryption at rest, bucket versioning, and ownership enforcement maintain log integrity once logs flow.
-- **Controls verified:** Each control was verified against its intended behavior using a documented test matrix.
-
-#### In progress
-- Organization-level CloudTrail trail
+- **Verified controls:** Each control was verified against its intended behavior using a documented test matrix.
 
 ### Phase 2
 - Identity Center for human access, with permission sets
@@ -57,7 +54,7 @@ Alternatives considered: Newer versions of Terraform support native S3-based loc
 Chose to keep the DynamoDB pattern because it matches what production environments likely run today while demonstrating the distributed-systems reasoning behind state locking.  A future upgrade would migrate to `use_lockfile` and decommission the DynamoDB table.
 
 ## How this was built
-### Environment Bootstrap
+### Environment bootstrap
 
 Before I could create any organization-level resources, Terraform needed somewhere to write state, ideally with locking to prevent concurrent runs from corrupting it.  This creates a chicken-and-egg problem: the standard pattern is remote state in S3 with a DynamoDB lock table.  With a new environment, those resources don't yet exist and Terraform won't init against a bucket it can't reach.
 
@@ -79,6 +76,62 @@ Here is the final state after applying all changes in Terraform:
 
 ![Organizations console screenshot](docs/images/organizations-console.png)
 
+### Organization-level Logging
+The last piece to pull all this foundational work together was implementing CloudTrail at the organization level.  This captures logs for both the admin and member accounts and is the prerequisite for implementing detective controls.  Testing the trail end-to-end was the final validation of the infrastructure and preventative controls.
+
 ## Reproducing this environment
 
+### Establish credentials
+You will need an initial set of credentials to start.  Creating a new account with AWS is straight-forward.
+- Follow the setup instructions on [AWS's website](https://aws.amazon.com/).
+- Create an IAM user with admin permissions.
+- Add the IAM admin user credentials to your local AWS config.  This is your management profile.
+
+### Bootstrap local state then migrate to remote backend
+Terraform will need to write to a local state file initially.  
+- Bootstrap the environment with an S3 bucket and a DynamoDB table.
+- Once both resources exist, add a `backend` block to `providers.tf`.  See [note](terraform/bootstrap/providers.tf) for build sequence.
+- Rerun `terraform init` and it should pick up the remote backend.
+
+### Build organization resources
+These configurations are established in a separate `org/` module.
+- Create the organization, OU, SCPs, sandbox (member) account.
+- Note: the sandbox account requires a unique email address.  
+- Create a sandbox profile in your local AWS config with the new credentials.  The second profile is used during validation testing.
+
+>[!WARNING]
+>An AWS account doesn't fully delete on `terraform destroy`.  It's marked for deletion after a delay.  This impacts what email you used to create the account, since it can't be immediately reused.
+
+### Verification
+- Testing steps are documented in [Verification](docs/verification.md).
+- Note: when testing Insecure Transport (Test 5.4), `InvalidArgument` is an expected result.  KMS's default TLS enforcement makes it difficult to cleanly isolate a denial from the bucket policy.
+
 ## Repo structure
+  ```bash
+  ├── aws-security-baseline
+  │   ├── docs
+  │   │   ├── images
+  │   │   │   ├── guardrail_scope_diagram.png
+  │   │   │   └── organizations-console.png
+  │   │   ├── outputs-phase1.txt
+  │   │   └── verification.md
+  │   ├── LICENSE
+  │   ├── README.md
+  │   └── terraform
+  │       ├── bootstrap
+  │       │   ├── main.tf
+  │       │   ├── outputs.tf
+  │       │   └── providers.tf
+  │       └── org
+  │           ├── cloudtrail.tf
+  │           ├── kms.tf
+  │           ├── main.tf
+  │           ├── outputs.tf
+  │           ├── policies
+  │           │   ├── cloudtrail_kms_key.json.tpl
+  │           │   ├── cloudtrail_s3_bucket_policy.json.tpl
+  │           │   ├── deny_cloudtrail_tampering.json
+  │           │   └── restrict_regions.json
+  │           ├── providers.tf
+  │           ├── s3.tf
+  │           └── scps.tf
