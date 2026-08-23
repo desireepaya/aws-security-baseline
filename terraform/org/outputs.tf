@@ -17,3 +17,12 @@ output "sandbox_account_id" {
   description = "The ID of the Sandbox account. Used for cross-account role assumption in Phase 2 work."
 }
 
+output "security_ou_id" {
+  value       = aws_organizations_organizational_unit.security.id
+  description = "The ID of the Security OU."
+}
+
+output "security_tooling_account_id" {
+  value       = aws_organizations_account.security_tooling.id
+  description = "The ID of the Security Tooling account. Used for cross-account role assumption in Phase 2 work."
+}
