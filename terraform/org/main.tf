@@ -1,9 +1,10 @@
 resource "aws_organizations_organization" "this" {
   aws_service_access_principals = [
-    # Grants trusted access for CloudTrail, GuardDuty, and Access Analyzer
+    # Grants trusted access for CloudTrail, GuardDuty, Access Analyzer, and Identity Center
     "cloudtrail.amazonaws.com",
     "guardduty.amazonaws.com",
     "access-analyzer.amazonaws.com",
+    "sso.amazonaws.com",
   ]
   # enables all features in the organization, which is required for SCPs and other advanced features
   # no downgrade path, so be sure you want this before applying

@@ -20,3 +20,14 @@ resource "aws_organizations_policy_attachment" "deny_cloudtrail_tampering_attach
   policy_id = aws_organizations_policy.deny_cloudtrail_tampering.id
   target_id = aws_organizations_organizational_unit.workloads.id
 }
+# 3. SCP to deny Identity Center Account Instance creation applied at root.
+resource "aws_organizations_policy" "deny_idc_account_instance_creation" {
+  name        = "DenyIdentityCenterAccountInstanceCreation"
+  description = "Deny Identity Center Account Instance creation."
+  content     = file("${path.module}/policies/deny_idc_account_instance_creation.json")
+  type        = "SERVICE_CONTROL_POLICY"
+}
+resource "aws_organizations_policy_attachment" "deny_idc_account_instance_creation_attachment" {
+  policy_id = aws_organizations_policy.deny_idc_account_instance_creation.id
+  target_id = aws_organizations_organization.this.roots[0].id
+}

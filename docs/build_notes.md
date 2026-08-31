@@ -3,6 +3,34 @@ This document captures notes as I work through project phases, primarily unexpec
 > [!NOTE]
 > **Phase 1 Findings:** Build notes for the first phase of this project live inline in the current README, pending extraction.
 
+### 2026-AUG-31
+Task summary:
+- Enabled Identity Center
+- Updated SCPs to deny account-level instance creation
+
+No Terraform resource exists to enable an org-level instance of Identity Center (IDC).  It's a gap in the Terraform provider, not a module gap.  It must be enabled from the console.  There is a `CreateInstance` API, but that creates an *account instance*, precisely what I don't want.
+
+I documented the one-way-door decision in the [Identity Foundation ADR](../docs/adr/0003-identity-foundation.md), so enabling this in console meant ensuring I had the region set correctly (us-west-2).  The enablement page has a big banner at the top asking you to do as much.  Below that, it offers three options:
+- Multi-region: sets us-west-2 as primary, and us-east-1 as the replication target
+- Single region: us-west-2
+- Custom region: us-west-2 as primary, choose additional region(s), but I'd need my own KMS key
+
+Multi-region is overkill for my use case, is opinionated on its secondary region, and creates service redundancy that I can't leverage.  Custom region is similar, I get the flexibility of choosing the region, but I need to manually create and set my own KMS key.  Single region is the right fit for this project.
+
+The region selection is fixed once I choose it, and the UI is clear that this is not a setting I can change later.  Once enabled, I'm dropped into the Overview page with a prominent Central Management tile that recommends the limitation of member accounts from creating their own IDC instances.  This isn't a service toggle, it's an update to SCPs.  An account-level instance circumvents the primary goal of enabling IDC, which is centralized control of external access.  Instead of configuring in console, I grabbed the recommended JSON, and shifted to my Terraform updates.
+
+The current SCPs apply to my Workloads OU, restricting updates to CloudTrail and region availability.  I want the account-level instance restriction to apply to all OUs in the organization.  While updating [scps.tf](../terraform/org/scps.tf), I'm reminded that organization and root are different objects.  Org-level SCPs attach to the root via `aws_organizations_organization.this.roots[0].id`, not the org ID.  I then ran `terraform plan` expecting the creation of two new resources, but hold on...
+``` bash
+# aws_organizations_organization.this will be updated in-place
+  ~ resource "aws_organizations_organization" "this" {
+      ~ aws_service_access_principals = [
+          - "sso.amazonaws.com",
+    }
+```
+Enabling IDC in the console created an unexpected footgun: it mutated a resource managed by Terraform.  Terraform is trying to delete the service access principal that AWS added when I enabled IDC.  Naturally, it would want to delete something that didn't match the state it was expecting.  I updated [main.tf](../terraform/org/main.tf) to add `sso.amazonaws.com` to my trusted access list, and the change block cleared on the next plan run.
+
+Any console action on a Terraform-managed resource will surface this type of drift on the next plan.  While general awareness of this relationship is good, it's better to practice the discipline of running plan after any console action before stacking further work on top of it.  This is where the Terraform investment pays off.
+
 ### 2026-AUG-19
 Task summary:
 - Delegated admin for Access Analyzer to Security Tooling account
