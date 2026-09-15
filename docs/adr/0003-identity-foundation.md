@@ -17,6 +17,9 @@ Permission boundaries are like SCPs for principals.  They allow me to cap the ma
 ## Decision
 I will use Identity Center for human access and deploy it before defining the IAM baseline.  It will be provisioned in `us-west-2`, since all of my current resources are located there.  I will use Identity Center's built-in directory as the identity provider, rather than taking on the cost of an external IdP.
 
+> [!NOTE]
+> Identity Center is enabled through the console, not a Terraform apply.  It doesn't change the impact of the decision, it's still a one-way-door, but it's otherwise transparent in the Terraform configuration.
+
 The IAM baseline work will use Identity Center's permission sets to implement permission boundaries.
 
 ## Consequences
@@ -29,3 +32,7 @@ The break-glass functionality needs to be verified through assumption to ensure 
 The `portfolio-admin` user can't be retired until the break-glass functionality is verified.
 
 Retiring the `portfolio-admin` principal means I need to reevaluate how current and future Terraform executes, since it currently authenticates with a standing IAM user.
+
+
+# notes
+if my standard access path (IDC) is not available, the break_glass policy is dependent on what i'd need to do in an emergency in each individual account

@@ -1,5 +1,5 @@
 > [!NOTE]
-> **Status**: Phase 1 build complete
+> **Status**: Phase 2 build in progress
 
 # AWS Security Baseline & Guardrail Architecture
 
@@ -11,8 +11,11 @@ This treats security as reliability.  Controls are preventative wherever possibl
 ![Architecture](docs/images/guardrail_scope_diagram.png)
 
 ## Scope
-### Phase 1
-#### Shipped
+### Shipped
+#### Phase 2
+- Identity Center for human access, with permission sets
+
+#### Phase 1
 - AWS Organization with management account and one workload account
 - One Workloads OU
 - Terraform with remote state
@@ -30,10 +33,10 @@ What this enables:
 
 ### Phase 2
 - Identity Center for human access, with permission sets
+- IAM baseline (break-glass role, baseline permission boundaries)
 - GuardDuty with delegated administration
 - AWS Config with organization aggregator
 - IAM Access Analyzer at the organization level
-- IAM baseline (break-glass role, baseline permission boundaries)
 
 ### Deliberately deferred
 **Security Hub** -- Aggregates findings from GuardDuty, Config, and Access Analyzer.  Aggregation has no value without a triage and remediation workflow.  Absent that workflow, Security Hub is a second dashboard producing the same findings surfaced elsewhere, at an additional cost.  Deferring to the Automated Remediation Pipeline project, where it connects detection and automated response.
@@ -45,7 +48,7 @@ What this enables:
 
 Alternatives considered: IAM users per account, Identity Center federated to an external IdP.
 
-Chose Identity Center with the built-in directory because IAM users in each account create credential sprawl that doesn't scale beyond two or three accounts.  An external IdP adds infrastructure complexity and cost that are not justified for an environment with one human user.  Identity Center centralizes human access at the org level and lets permission sets be assigned to accounts, which is the pattern that would extend cleanly to a production environment.  This work lands in Phase 2.
+Chose Identity Center with the built-in directory because IAM users in each account create credential sprawl that doesn't scale beyond two or three accounts.  An external IdP adds infrastructure complexity and cost that are not justified for an environment with one human user.  Identity Center centralizes human access at the org level and assigns permission sets to accounts, which is the pattern that would extend cleanly to a production environment.
 
 **DynamoDB lock table for state locking**
 
@@ -54,6 +57,7 @@ Alternatives considered: Newer versions of Terraform support native S3-based loc
 Chose to keep the DynamoDB pattern because it matches what production environments likely run today while demonstrating the distributed-systems reasoning behind state locking.  A future upgrade would migrate to `use_lockfile` and decommission the DynamoDB table.
 
 ## How this was built
+### Phase 1
 ### Environment bootstrap
 
 Before I could create any organization-level resources, Terraform needed somewhere to write state, ideally with locking to prevent concurrent runs from corrupting it.  This creates a chicken-and-egg problem: the standard pattern is remote state in S3 with a DynamoDB lock table.  With a new environment, those resources don't yet exist and Terraform won't init against a bucket it can't reach.
@@ -62,7 +66,7 @@ I solved it by writing the bootstrap config with no backend block, defaulting to
 
 One deferred decision worth mentioning: Terraform recently introduced native S3 locking with `use_lockfile`, deprecating the DynamoDB approach.  I kept DynamoDB because it matches what many production environments likely run and demonstrates the distributed-systems reasoning behind state locking.
 
-For authentication during the bootstrap phase, I created an IAM user with scoped admin permissions to the sandbox account.  Identity Center is the production pattern and is scoped for Phase 2.  It requires the organization management account to exist first, which is the bootstrap work of Phase 1.
+For authentication during the bootstrap phase, I created an IAM user with scoped admin permissions to the sandbox account.  Identity Center is the production pattern and was completed in Phase 2.  It required the organization management account to exist first, which is the bootstrap work of Phase 1.
 
 With state management and authentication in place, the next step creates the AWS Organization itself.
 
@@ -77,7 +81,20 @@ Here is the final state after applying all changes in Terraform:
 ![Organizations console screenshot](docs/images/organizations-console.png)
 
 ### Organization-level Logging
+
 The last piece to pull all this foundational work together was implementing CloudTrail at the organization level.  This captures logs for both the admin and member accounts and is the prerequisite for implementing detective controls.  Testing the trail end-to-end was the final validation of the infrastructure and preventative controls.
+
+---
+
+### Phase 2
+### Identity Center
+My intent from the beginning was to get to a centralized human access model.  As described above, I needed an admin-level IAM user to bootstrap the environment, but I didn't want to rely on long-lived credentials for this project.  This user will remain active until I've completed the IAM baseline work.  With the bootstrap of Phase 1 done, I shifted to configuring Identity Center for human access.  
+
+My mental model was rooted in groups unlocking access for individual users.  As I refined access for each user persona, I discovered I couldn't rely solely on AWS managed policies for some use cases.  For example, the `SecurityAnalyst` persona maps to the AWS managed policy enabling investigations, `SecurityAudit`.  But if an analyst discovers an issue that requires remediation, she doesn't have permissions in that account to make changes.  She would need to escalate to a `PlatformAdmin` or I would need to add a different AWS managed policy -- `AdministratorAccess` -- to the permission set.  Ideally, I would scope this as a temporary elevation of privileges by assuming a different role, say `SecurityRemediation`, but AWS doesn't have a managed policy like that.  I chose to defer custom policies to the IAM baseline step, which simplified this initial implementation.
+
+One thing that surprised me is how permission set assignments and provisioned roles differ in this model.  Permission sets are an Identity Center artifact and are *assigned* to groups in my implementation.  That assignment scales with the number of *groups* who need access.  By contrast, roles provisioned as part of that assignment scale as the product of *accounts* and *permission sets*.  If I assigned an existing permission set to a new group, the assignments would increase but the provisioned roles would stay the same.  This underscores the benefit of group membership for human access: users can be added or removed from groups without policy changes, editing roles, or applying Terraform.  This diagram illustrates how that interaction of groups, permission sets, and accounts impacts role count:
+
+![IdentityPath](docs/images/identity_path_diagram.png)
 
 ## Reproducing this environment
 
@@ -110,8 +127,14 @@ These configurations are established in a separate `org/` module.
   ```bash
   ├── aws-security-baseline
   │   ├── docs
+  │   │   ├── adr
+  │   │   │   ├── 0001-security-tooling-account.md
+  │   │   │   ├── 0002-centralized-delegated-admin-security-tooling.md
+  │   │   │   ├── 0003-identity-foundation.md
+  │   │   ├── build_notes.md
   │   │   ├── images
   │   │   │   ├── guardrail_scope_diagram.png
+  │   │   │   ├── identity_path_diagram.png
   │   │   │   └── organizations-console.png
   │   │   ├── outputs-phase1.txt
   │   │   └── verification.md
@@ -122,16 +145,23 @@ These configurations are established in a separate `org/` module.
   │       │   ├── main.tf
   │       │   ├── outputs.tf
   │       │   └── providers.tf
-  │       └── org
-  │           ├── cloudtrail.tf
-  │           ├── kms.tf
+  │       ├── org
+  │       │   ├── cloudtrail.tf
+  │       │   ├── identity_center.tf
+  │       │   ├── kms.tf
+  │       │   ├── main.tf
+  │       │   ├── outputs.tf
+  │       │   ├── policies
+  │       │   │   ├── cloudtrail_kms_key.json.tpl
+  │       │   │   ├── cloudtrail_s3_bucket_policy.json.tpl
+  │       │   │   ├── deny_cloudtrail_tampering.json
+  │       │   │   ├── deny_idc_account_instance_creation.json
+  │       │   │   └── restrict_regions.json
+  │       │   ├── providers.tf
+  │       │   ├── s3.tf
+  │       │   └── scps.tf
+  │       └── security-tooling
   │           ├── main.tf
-  │           ├── outputs.tf
-  │           ├── policies
-  │           │   ├── cloudtrail_kms_key.json.tpl
-  │           │   ├── cloudtrail_s3_bucket_policy.json.tpl
-  │           │   ├── deny_cloudtrail_tampering.json
-  │           │   └── restrict_regions.json
   │           ├── providers.tf
-  │           ├── s3.tf
-  │           └── scps.tf
+  │           ├── terraform.tfvars
+  │           └── variables.tf

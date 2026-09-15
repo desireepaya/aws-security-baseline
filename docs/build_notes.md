@@ -17,14 +17,14 @@ Reviewed SCP attachment points: deny-IDC at root, CloudTrail tampering and regio
 **Some surprises:**
 Session duration format is different than expected.  It follows ISO 8601, requiring "PT" ahead of the time duration, "1H".
 
-Using `depends_on` in the policy attachment resource to (need a better understanding here)
+Using `depends_on` in the policy attachment resource avoids arbitrary sequencing when destroying policy attachments.  Any changes to the attachment trigger AWS to push a permission set update.  In the case of destroying attachments, without the dependency declared in the resource, Terraform could destroy the assignments *before* the attachment.  I want the attachment destroyed first while the assignments still exist.
 
 **Building out groups model:**
 I started out thinking that my `test_user` would have standing read-only permissions by design, but as I worked through the group model, I ended with a validation instrument with no permissions at all.  That helped me build a mental model of how I want to test permissions going forward and removed the need to maintain a long-lived workforce user with no groups.
 
 Given my past experience butting up against a lack of billing permissions in the past, I wanted to ensure `PlatformAdmins` were able to manage billing.  After researching its target permission set, I discovered that `AdministratorAccess` grants access to billing anyway, so that simplified its assignments.
 
-I set the goal at the outset to use AWS-managed-policies only, since I didn't to manage custom policies as part of this project.  I ran into issues on three different occassions trying to refine access based on user persona that demonstrated the bar was pretty low for needing custom policies.  Tasks like incident response or vulnerability remediation would require finer-grained permissions that simply granting `AdministratorAccess` to the SecurityAnalysts group.  Walking through possible esclataion paths, I landed on assuming a different role to accomplish those tasks, similar to `sudo`.
+I set the goal at the outset to use AWS-managed-policies only, since I didn't want to manage custom policies as part of this project.  I ran into issues on three different occassions trying to refine access based on user personas that demonstrated the bar was pretty low for needing custom policies.  Tasks like incident response or vulnerability remediation would require finer-grained permissions that simply granting `AdministratorAccess` to the SecurityAnalysts group.  Walking through possible esclataion paths, I landed on assuming a different role to accomplish those tasks, similar to `sudo`.
 
 The new terraform file applied cleanly and I saw the target accounts updated with the new groups.  I created a new workforce user and confirmed the portal was empty, as expected.
 
@@ -34,8 +34,6 @@ I added my new user to the `PlatformAdmins` group, logged out, back in, and the 
 I scoped this initially thinking an IAM user would need broad permissions to fix multiple broken things, like a first responder.  In my permission sets sketch, it had its own column alongside the other IDC personas.  But working through the IDC design, it became clear that the `break_glass` user has a narrow definition: it needs to restore IDC access.  That can be done cleanly in the console, so it avoids generating long-lived programmatic credentials for this user.  It also points to two obvious detection patterns: `ConsoleLogin` and `AssumeRole`, since the user would be inert-at-rest and assume a role to do any fixing.
 
 Narrowing the use case greatly simplified things, collapsing the design to a single account and one role.  This work lands in the next step, IAM baseline along with EventBridge detection.
-
-
 
 ### 2026-AUG-31
 Task summary:
