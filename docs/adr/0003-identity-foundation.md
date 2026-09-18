@@ -32,7 +32,3 @@ The break-glass functionality needs to be verified through assumption to ensure 
 The `portfolio-admin` user can't be retired until the break-glass functionality is verified.
 
 Retiring the `portfolio-admin` principal means I need to reevaluate how current and future Terraform executes, since it currently authenticates with a standing IAM user.
-
-
-# notes
-if my standard access path (IDC) is not available, the break_glass policy is dependent on what i'd need to do in an emergency in each individual account

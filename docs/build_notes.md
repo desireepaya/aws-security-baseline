@@ -3,6 +3,70 @@ This document captures notes as I work through project phases, primarily unexpec
 > [!NOTE]
 > **Phase 1 Findings:** Build notes for the first phase of this project live inline in the current README, pending extraction.
 
+### 2026-SEP-17
+Task summary:
+- Verify MFA condition when assuming admin role
+
+**Test MFA enforcement for admin role assumption**
+
+I previously created the IAM user in console and set its password.  No keys issued, no MFA enrollment.
+
+Negative test confirms the `break-glass` user isn't authorized to assume the admin role:
+```bash
+"userIdentity": {
+        "type": "IAMUser",
+        "principalId": "AIDA<redacted>",
+        "arn": "arn:aws:iam::<management_account>:user/break-glass",
+<snip>
+"eventTime": "2026-09-17T21:29:08Z",
+    "eventSource": "sts.amazonaws.com",
+    "eventName": "AssumeRole",
+    "awsRegion": "us-west-2",
+    "sourceIPAddress": "AWS Internal",
+    "userAgent": "AWS Internal",
+    "errorCode": "AccessDenied",
+    "errorMessage": "User: arn:aws:iam::<management_account>:user/break-glass is not authorized to perform: sts:AssumeRole on resource: arn:aws:iam::<management_account>:role/break_glass_admin_role"
+```
+Enabled MFA and ran positive test by assuming the admin role:
+```bash
+"userIdentity": {
+        "type": "IAMUser",
+        "principalId": "AIDA<redacted>",
+        "arn": "arn:aws:iam::<management_account>:user/break-glass",
+<snip>
+"eventTime": "2026-09-17T21:48:44Z",
+    "eventSource": "sts.amazonaws.com",
+    "eventName": "AssumeRole",
+    "awsRegion": "us-west-2",
+    "sourceIPAddress": "AWS Internal",
+    "userAgent": "AWS Internal",
+    "requestParameters": {
+        "roleArn": "arn:aws:iam::<management_account>:role/break_glass_admin_role",
+        "roleSessionName": "break-glass"
+```
+### 2026-SEP-16
+Task summary:
+- Verify human access + role assumption
+- Created role and trust policy for emergency access user
+- Created emergency access user and login profile
+
+My IAM user `portfolio-admin` was used up to this point for console and programmatic access.  With IDC deployed, I will shift any console-related work to my workforce user + role assumption.  I verified this works by logging in as my user `desiree`, assuming the `PlatformAdmin` role in the Management Account from the portal, and reviewing the *Billing and Cost* dashboard, a view that isn't available for `SecurityAudit`.  That's a weak validation, though.  What I really want to see is an event in CloudTrail, like this one!
+[AssumedRole_event_ARNredacted]
+
+**Breaking glass**
+This work is split between manual provisioning in console and terraform.
+1. IAM user: manual.  It can't rely on a system that it's meant to repair, so I can't provision the user from terraform.
+2. login profile: manual.  I don't want to write even temporary passwords to state.
+3. MFA device registration: manual.  The enrollment requires multiple entries.
+4. role and trust policy: terraform.  Since the trust policy determines who can assume this role, I was commit history and diffs on changes.
+
+The gotcha to #4 is terraform doesn't manage the user, so I need to pull it with a `data` block.  I chose this instead of hardcoding the ARN so it will fail loudly at plan time if the user doesn't exist.
+
+Started with the trust policy.  Spent time to drill into the conditional to require MFA and what behavior results from `Bool` versus `BoolIfExists`.  Since break_glass access is console only, this condition should fail closed if MFA is missing and not allow programmatic access for long-lived access keys.
+
+Refreshed usage for `templatefile()` after creating the trust policy template.  I hadn't needed to assign variables before.  The data block on terraform pulls the IAM user ARN, which is also referenced in the policy template.
+
+
 ### 2026-SEP-11
 Task summary:
 - Finalized permission sets
