@@ -3,6 +3,56 @@ This document captures notes as I work through project phases, primarily unexpec
 > [!NOTE]
 > **Phase 1 Findings:** Build notes for the first phase of this project live inline in the current README, pending extraction.
 
+### 2026-SEP-27
+Task summary:
+- Continue break-glass alert
+
+The biggest challenge finishing the alerts work was wrapping my head around the separate resources required and how they link together.  I intentionally slowed this down so I could build a good mental model around how this is done.  To help me understand how resources and templates interact, I focused on what each is doing.
+- `resource` is a thing that exists in AWS
+- `document` answers a question about a specific resource
+- `templatefile()` exists to handle resource names that don't yet exist
+
+This diagram shows how that applies to the alerts work.  The `aws_iam_role` can happily exist independent of my project, but in order to understand how it acts in this context, I can see which `Principal` is allowed to assume a role by looking at the trust policy.
+
+![json_templates_diagram](images/json_templates_to_terraform_resources.png)
+
+Picking up where I left of previously...
+
+I applied changes in Terraform and confirmed the subscription.  I logged in as `break-glass` and assumed the admin role.  I received the alert right away, but it was an unreadable json blob.  There's no way I'd be able to parse this meaningfully in a panic.  As it turns out, my scope did not include writing an input transformer for these alerts.  My first instinct was to reduce the data sent by changing the rule, but the rule decides which events match, not what gets forwarded.  Shaping the data sent is the target's job.  I want to ensure that all future topic subscribers get the same formatting, so I'll put it in the `aws_cloudwatch_event_target` resource.
+
+If I imagine receiving this alert, I'd want just enough information to determine whether it was a legitimate use of the credential.  Considering I'm the only one who should be using it, getting the alert at all is a strong signal that's something's amiss.  Looking through the event data, I decided these five details would be enough information to tell me what to do next:
+* `eventTime`
+* `userName`
+* `roleArn`
+* `mfaAuthenticated`
+* `sourceIPAddress`
+
+`mfaAuthenticated` is an interesting one.  My trust policy has a condition to only allow when MFA is present. If this alert shows it's false, then I know something has really gone wrong.  I'm adding a brief note to the template to say as much, but I ultimately want the alert to point to a runbook.
+
+I also ran into a formatting limitation with EventBridge -- newline processing.  I tried escaping newlines in the template, but it didn't behave as I expected.  I chose a vertical separator instead and will defer better formatting to later Lambda formatter work.
+
+The alert fires on `break_glass_admin_role` assumption with an event summary that's actionable at 2AM.
+
+### 2026-SEP-24
+Task summary:
+- Configure break-glass alert
+
+Digging into event history for the org trail to find the right data for triggering alerts on role assumption for the `break-glass` account.  I see events associated with the account from testing, but they are based on the `SwitchRole` event, which is emitted from console.  It only exists when a human uses the browser to assume a role.  I want one layer deeper to capture unexpected attempts from an SDK or CLI.  That event is from STS, `AssumeRole`.  The alert conditions should include just enough detail to capture the event where ever it happens.  Limiting it to a region, for instance, would miss attempts outside of that region.  Since this will be deployed with Terraform, I can use an existing placeholder for the `roleArn`.
+
+```json
+{
+  "source": ["aws.sts"],
+  "detail-type": ["AWS API Call via CloudTrail"],
+  "detail": {
+    "eventSource": ["sts.amazonaws.com"],
+        "eventName": ["AssumeRole"],
+        "requestParameters": {
+            "roleArn": ["${break_glass_role_arn}"]
+        }
+    }
+}
+```
+
 ### 2026-SEP-17
 Task summary:
 - Verify MFA condition when assuming admin role

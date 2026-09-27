@@ -35,8 +35,10 @@ What this enables:
 - Identity Center for human access, with permission sets
 - IAM baseline (break-glass role, baseline permission boundaries)
 - GuardDuty with delegated administration
-- AWS Config with organization aggregator
 - IAM Access Analyzer at the organization level
+- AWS Config with organization aggregator
+
+AWS Config is sequenced last deliberately because aggregation without remediation is the same reason I've deferred Security Hub (see below).  Config is the detection source for a later project.
 
 ### Deliberately deferred
 **Security Hub** -- Aggregates findings from GuardDuty, Config, and Access Analyzer.  Aggregation has no value without a triage and remediation workflow.  Absent that workflow, Security Hub is a second dashboard producing the same findings surfaced elsewhere, at an additional cost.  Deferring to the Automated Remediation Pipeline project, where it connects detection and automated response.
