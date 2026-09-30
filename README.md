@@ -14,9 +14,13 @@ This treats security as reliability.  Controls are preventative wherever possibl
 ### Shipped
 #### Phase 2
 - Identity Center for human access, with permission sets
+- GuardDuty with delegated admin to Security Tooling
+- IAM Access Analyzer at the org level
+- Emergency access (`break-glass`), MFA-enforced, with detection rule + alerts
+- Terraform execution migrated from an IAM user to an IDC session
 
 #### Phase 1
-- AWS Organization with management account and one workload account
+- AWS Organization with management account and two member accounts
 - One Workloads OU
 - Terraform with remote state
 - Service Control Policies applied at the OU level
@@ -32,10 +36,7 @@ What this enables:
 - **Verified controls:** Each control was verified against its intended behavior using a documented test matrix.
 
 ### Phase 2
-- Identity Center for human access, with permission sets
-- IAM baseline (break-glass role, baseline permission boundaries)
-- GuardDuty with delegated administration
-- IAM Access Analyzer at the organization level
+- IAM baseline continued (permission boundaries, custom policies)
 - AWS Config with organization aggregator
 
 AWS Config is sequenced last deliberately because aggregation without remediation is the same reason I've deferred Security Hub (see below).  Config is the detection source for a later project.
@@ -90,13 +91,18 @@ The last piece to pull all this foundational work together was implementing Clou
 
 ### Phase 2
 ### Identity Center
-My intent from the beginning was to get to a centralized human access model.  As described above, I needed an admin-level IAM user to bootstrap the environment, but I didn't want to rely on long-lived credentials for this project.  This user will remain active until I've completed the IAM baseline work.  With the bootstrap of Phase 1 done, I shifted to configuring Identity Center for human access.  
+My intent from the beginning was to get to a centralized human access model.  As described above, I needed an admin-level IAM user to bootstrap the environment, but I didn't want to rely on long-lived credentials for this project.  The bootstrap user's console access is retired now that role assumption through IDC is verified.  Terraform runs on an SSO session and the IAM user is pending deletion.  With the bootstrap of Phase 1 done, I shifted to configuring Identity Center for human access.  
 
 My mental model was rooted in groups unlocking access for individual users.  As I refined access for each user persona, I discovered I couldn't rely solely on AWS managed policies for some use cases.  For example, the `SecurityAnalyst` persona maps to the AWS managed policy enabling investigations, `SecurityAudit`.  But if an analyst discovers an issue that requires remediation, she doesn't have permissions in that account to make changes.  She would need to escalate to a `PlatformAdmin` or I would need to add a different AWS managed policy -- `AdministratorAccess` -- to the permission set.  Ideally, I would scope this as a temporary elevation of privileges by assuming a different role, say `SecurityRemediation`, but AWS doesn't have a managed policy like that.  I chose to defer custom policies to the IAM baseline step, which simplified this initial implementation.
 
 One thing that surprised me is how permission set assignments and provisioned roles differ in this model.  Permission sets are an Identity Center artifact and are *assigned* to groups in my implementation.  That assignment scales with the number of *groups* who need access.  By contrast, roles provisioned as part of that assignment scale as the product of *accounts* and *permission sets*.  If I assigned an existing permission set to a new group, the assignments would increase but the provisioned roles would stay the same.  This underscores the benefit of group membership for human access: users can be added or removed from groups without policy changes, editing roles, or applying Terraform.  This diagram illustrates how that interaction of groups, permission sets, and accounts impacts role count:
 
 ![IdentityPath](docs/images/identity_path_diagram.png)
+
+### Emergency Access
+Implementing IDC creates a reliability problem: if I lose access to IDC, I lose access to my environment.  This could happen with something as innocuous as a bad Terraform apply.  I need an IAM user whose only purpose is restoring IDC access, with permissions scoped to resolve a broad range of possible issues.  It's narrowly scoped in practice, but not in policy.  This was a [deliberate decision](docs/adr/0004-emergency-access.md) since I don't want my permissions to fail precisely when I need them.  The IAM user has no permissions at rest and must assume a role for admin access.  MFA is enforced in its trust policy, and the user was provisioned outside of Terraform so no apply can remove this recovery path.
+
+Since its usage is only for emergencies, any assumption of the `break-glass` admin role should sound an alarm.  I [created an EventBridge rule](docs/build_notes.md#2026-sep-27 keyed on the STS event so it fires on every assumption.  I added a condition to the topic policy to restrict publishing to just my rule, and created a transformer so the alert is easy to understand if a bleary-eyed me receives it at 2AM.  Now, every routine path is on short-lived credentials from a central source.  The one standing credential is MFA-gated, has no permissions of its own, and alarms on use.
 
 ## Reproducing this environment
 
@@ -127,43 +133,51 @@ These configurations are established in a separate `org/` module.
 
 ## Repo structure
   ```bash
-  ├── aws-security-baseline
-  │   ├── docs
-  │   │   ├── adr
-  │   │   │   ├── 0001-security-tooling-account.md
-  │   │   │   ├── 0002-centralized-delegated-admin-security-tooling.md
-  │   │   │   ├── 0003-identity-foundation.md
-  │   │   ├── build_notes.md
-  │   │   ├── images
-  │   │   │   ├── guardrail_scope_diagram.png
-  │   │   │   ├── identity_path_diagram.png
-  │   │   │   └── organizations-console.png
-  │   │   ├── outputs-phase1.txt
-  │   │   └── verification.md
-  │   ├── LICENSE
-  │   ├── README.md
-  │   └── terraform
-  │       ├── bootstrap
-  │       │   ├── main.tf
-  │       │   ├── outputs.tf
-  │       │   └── providers.tf
-  │       ├── org
-  │       │   ├── cloudtrail.tf
-  │       │   ├── identity_center.tf
-  │       │   ├── kms.tf
-  │       │   ├── main.tf
-  │       │   ├── outputs.tf
-  │       │   ├── policies
-  │       │   │   ├── cloudtrail_kms_key.json.tpl
-  │       │   │   ├── cloudtrail_s3_bucket_policy.json.tpl
-  │       │   │   ├── deny_cloudtrail_tampering.json
-  │       │   │   ├── deny_idc_account_instance_creation.json
-  │       │   │   └── restrict_regions.json
-  │       │   ├── providers.tf
-  │       │   ├── s3.tf
-  │       │   └── scps.tf
-  │       └── security-tooling
-  │           ├── main.tf
-  │           ├── providers.tf
-  │           ├── terraform.tfvars
-  │           └── variables.tf
+aws-security-baseline
+├── docs
+│   ├── adr
+│   │   ├── 0001-security-tooling-account.md
+│   │   ├── 0002-centralized-delegated-admin-security-tooling.md
+│   │   ├── 0003-identity-foundation.md
+│   │   └── 0004-emergency-access.md
+│   ├── build_notes.md
+│   ├── images
+│   │   ├── guardrail_scope_diagram.png
+│   │   ├── identity_path_diagram.png
+│   │   ├── json_templates_to_terraform_resources.png
+│   │   └── organizations-console.png
+│   └── verification.md
+├── LICENSE
+├── README.md
+└── terraform
+    ├── bootstrap
+    │   ├── main.tf
+    │   ├── outputs.tf
+    │   └── providers.tf
+    ├── org
+    │   ├── break_glass_alerts.tf
+    │   ├── break_glass.tf
+    │   ├── cloudtrail.tf
+    │   ├── identity_center.tf
+    │   ├── kms.tf
+    │   ├── main.tf
+    │   ├── outputs.tf
+    │   ├── policies
+    │   │   ├── break_glass_alerts_topic_policy.json.tpl
+    │   │   ├── break_glass_assume_role_pattern.json.tpl
+    │   │   ├── break_glass_trust_policy.json.tpl
+    │   │   ├── cloudtrail_kms_key.json.tpl
+    │   │   ├── cloudtrail_s3_bucket_policy.json.tpl
+    │   │   ├── deny_cloudtrail_tampering.json
+    │   │   ├── deny_idc_account_instance_creation.json
+    │   │   └── restrict_regions.json
+    │   ├── providers.tf
+    │   ├── s3.tf
+    │   ├── scps.tf
+    │   └── variables.tf
+    └── security-tooling
+        ├── main.tf
+        ├── providers.tf
+        └── variables.tf
+```
+
