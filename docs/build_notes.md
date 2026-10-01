@@ -3,6 +3,38 @@ This document captures notes as I work through project phases, primarily unexpec
 > [!NOTE]
 > **Phase 1 Findings:** Build notes for the first phase of this project live inline in the current README, pending extraction.
 
+### 2026-SEP-30
+Task summary:
+- README updates
+- Negative test for detection
+
+Alerts fire as expected when `break-glass` assumes the admin access role.  For the negative test, I disabled MFA to see if the trust policy enforces the MFA condition.  I expect the role assumption to fail.  While the UI message doesn't indicate the trust policy failed on MFA, I can see in the CloudTrail event that access was denied and MFA authentication was not present:
+
+```bash
+"userIdentity": {
+        "type": "IAMUser",
+        "principalId": "AIDA<redacted>",
+        "arn": "arn:aws:iam::<management_account>:user/break-glass",
+        "accountId": "<management_account>",
+        "accessKeyId": "ASIA<redacted>",
+        "userName": "break-glass",
+        "sessionContext": {
+            "attributes": {
+                "creationDate": "2026-10-01T03:12:22Z",
+                "mfaAuthenticated": "false"
+<snip>
+"eventTime": "2026-10-01T03:13:10Z",
+    "eventSource": "sts.amazonaws.com",
+    "eventName": "AssumeRole",
+    "awsRegion": "us-west-2",
+    "sourceIPAddress": "AWS Internal",
+    "userAgent": "AWS Internal",
+    "errorCode": "AccessDenied",
+    "errorMessage": "User: arn:aws:iam::<management_account>:user/break-glass is not authorized to perform: sts:AssumeRole on resource: arn:aws:iam::<management_account>:role/break_glass_admin_role",
+    "requestParameters": null,
+    "responseElements": null,
+```
+
 ### 2026-SEP-27
 Task summary:
 - Continue break-glass alert
@@ -75,7 +107,9 @@ Negative test confirms the `break-glass` user isn't authorized to assume the adm
     "sourceIPAddress": "AWS Internal",
     "userAgent": "AWS Internal",
     "errorCode": "AccessDenied",
-    "errorMessage": "User: arn:aws:iam::<management_account>:user/break-glass is not authorized to perform: sts:AssumeRole on resource: arn:aws:iam::<management_account>:role/break_glass_admin_role"
+    "errorMessage": "User: arn:aws:iam::<management_account>:user/break-glass is not authorized to perform: sts:AssumeRole on resource: arn:aws:iam::<management_account>:role/break_glass_admin_role",
+    "requestParameters": null,
+    "responseElements": null,
 ```
 Enabled MFA and ran positive test by assuming the admin role:
 ```bash
