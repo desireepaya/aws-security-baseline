@@ -1,10 +1,12 @@
 resource "aws_organizations_organization" "this" {
   aws_service_access_principals = [
-    # Grants trusted access for CloudTrail, GuardDuty, Access Analyzer, and Identity Center
+    # Grants trusted access for CloudTrail, GuardDuty, Access Analyzer, Identity Center, IAM, and Accounts.
     "cloudtrail.amazonaws.com",
     "guardduty.amazonaws.com",
     "access-analyzer.amazonaws.com",
     "sso.amazonaws.com",
+    "iam.amazonaws.com",
+    "account.amazonaws.com"
   ]
   # enables all features in the organization, which is required for SCPs and other advanced features
   # no downgrade path, so be sure you want this before applying
@@ -14,6 +16,14 @@ resource "aws_organizations_organization" "this" {
     "SERVICE_CONTROL_POLICY",
   ]
 }
+resource "aws_iam_organizations_features" "this" {
+  enabled_features = [
+    "RootCredentialsManagement", # audit and delete member root credentials
+    "RootSessions",              # privileged root tasks from the mgmt account
+  ]
+
+  depends_on = [aws_organizations_organization.this]
+}
 
 resource "aws_organizations_organizational_unit" "workloads" {
   name      = "Workloads"
@@ -22,7 +32,7 @@ resource "aws_organizations_organizational_unit" "workloads" {
 
 resource "aws_organizations_account" "sandbox" {
   name      = "Sandbox"
-  email     = "cloudadmin.desireepaya+sandbox@gmail.com"
+  email     = "aws+keel-sandbox@desireepaya.com"
   parent_id = aws_organizations_organizational_unit.workloads.id
 
   lifecycle {
@@ -38,7 +48,7 @@ resource "aws_organizations_organizational_unit" "security" {
 
 resource "aws_organizations_account" "security_tooling" {
   name      = "Security Tooling"
-  email     = "cloudadmin.desireepaya+security-tooling@gmail.com"
+  email     = "aws+keel-security-tooling@desireepaya.com"
   parent_id = aws_organizations_organizational_unit.security.id
 
   lifecycle {
