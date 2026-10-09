@@ -46,3 +46,6 @@ terraform.rc
 # TF output dumps - likely to go stale and not useful to include in version control
 docs/outputs-*.txt
 docs/outputs-*.json
+
+# Ignore virtual environments
+.venv/

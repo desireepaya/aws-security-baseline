@@ -6,12 +6,16 @@ This document captures notes as I work through project phases, primarily unexpec
 ### 2026-OCT-08
 Task summary:
 - Naming change and cleanup
+- Diagrams in python
 
 Working on a different AWS environment, I realized my email and account naming conventions were brittle.  The major point of friction was organizing credentials in 1password and managing multiple profiles.  My naming scheme didn't support quick switching at all, and felt draining to manage the context.  
 
 I updated root email addresses to follow a cleaning naming convention and gave the baseline project a name -- Keel, as in the central beam of a ship.  As with most renaming exercises, it seemed easier at the outset, then quickly unraveled.  About halfway through changes in console, I remembered that I may get a state conflict in terraform for some of my changes.  Luckily, I'd already added a lifecycle ignore for `email`.  The only place that I couldn't apply the name change was in the org-level trail.  I can live with an anomalous name rather than losing history with that trail.
 
 While completing root email changes, I saw a banner for [centralized root user access management](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_root-user.html#id_root-user-access-management), an IAM feature that disables root passwords for organization members.  These accounts were created from Organizations, so they didn't have passwords, but password recovery remained compromise risk.  I added the feature as a resource to [org/main.tf](/terraform/org/main.tf) and confirmed that no passwords were present for member accounts in console.
+
+**Diagrams in python**
+My general frustration with draw.io's finicky UI inspired me to explore alternatives.  The problem I'm trying to solve here is consistent style across artifacts, which was difficult for me to recreate in draw.io between sessions.  I'm using a combination of python and graphviz instead.  I installed dependencies, updated .gitignore, and tested an initial style file.
 
 ### 2026-SEP-30
 Task summary:
