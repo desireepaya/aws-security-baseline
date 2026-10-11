@@ -1,7 +1,7 @@
 This document captures notes as I work through project tasks, primarily unexpected gotchas and troubleshooting.  Entries are in reverse chronological order, newest first.  See [docs/adr](../docs/adr/) for architectural decisions.
 
 > [!NOTE]
-> **Phase 1 Findings:** Build notes for the first phase of this project live in [build_notes_phase1.md](/docs/build_notes_phase1.md).
+> **Phase 1 Narrative:** Build notes and findings for the first phase of this project live in [How this was built](./how_this_was_built.md).
 
 ### 2026-OCT-10
 Task summary:
