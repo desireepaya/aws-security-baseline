@@ -49,3 +49,4 @@ docs/outputs-*.json
 
 # Ignore virtual environments
 .venv/
+__pycache__/
