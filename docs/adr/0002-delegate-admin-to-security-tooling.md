@@ -12,7 +12,7 @@ I chose not to configure and manage security tooling in each account separately 
 I delegated administration of security tools to the Security Tooling account.  This includes GuardDuty Detector and Access Analyzer.
 
 ## Consequences
-Configuring delegated admin supports the account boundary goal established in [ADR-0001: Security Tooling Account and Security OU](../adr/0001-security-tooling-account.md), and centralizes administration for the organization in the Security Tooling account.
+Configuring delegated admin supports the account boundary goal established in [ADR-0001: Security services get a dedicated OU and account](./0001-security-services-dedicated-account.md), and centralizes administration for the organization in the Security Tooling account.
 
 However, the delegation mechanism isn't consistent across AWS services.  GuardDuty's dedicated resource [(`aws_guardduty_organization_admin_account`)](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_organization_admin_account) provisions the necessary service-linked role automatically.  Lacking a specific delegation resource, Access Analyzer uses the generic [`aws_organizations_delegated_administrator`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/organizations_delegated_administrator) which requires the provisioning of a separate role using [`aws_iam_service_linked_role`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_service_linked_role).
 

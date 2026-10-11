@@ -4,7 +4,7 @@ Status: Accepted
 Date: 2026-OCT-1
 
 ## Context
-This project was bootstrapped with an IAM user ahead of implementing IAM Identity Center (IDC).  Now that IDC is live and the human path verified, it's time to update Terraform to use it, eliminating the known risk of a long-lived key with admin privileges [ADR-0003: Identity Foundation](./0003-identity-foundation.md).  This work was pulled forward due to a workstation upgrade.
+This project was bootstrapped with an IAM user ahead of implementing IAM Identity Center (IDC).  Now that IDC is live and the human path verified, it's time to update Terraform to use it, eliminating the known risk of a long-lived key with admin privileges [ADR-0003: Human access is managed by Identity Center](./0003-human-access-managed-by-identity-center.md).  This work was pulled forward due to a workstation upgrade.
 
 ## Decision
 Terraform runs under a human IDC SSO session assuming the `PlatformAdmin` permission set in the management account.  SSO provides short-lived credentials, so there's no key to rotate and no key to leak, and CloudTrail shows the named human behind every apply.  Terraform actions no longer rely on the `portfolio-admin` key.
