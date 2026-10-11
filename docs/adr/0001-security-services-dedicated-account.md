@@ -1,4 +1,4 @@
-# ADR-0001: Security Tooling Account and Security OU
+# ADR-0001: Security services get a dedicated OU and account
 
 Status: Accepted
 
@@ -18,7 +18,6 @@ This leverages the delegated admin support that already exists for the security 
 
 - **OU name:** Security 
 - **Account name:** security-tooling 
-- **Account email:** cloudadmin.desireepaya+security-tooling@gmail.com 
 
 # Consequences
 Updating the Portfolio Organization improves security posture by adopting AWS’s security reference architecture.  There’s a clear distinction between OU functions, and risk to the Management account is reduced.

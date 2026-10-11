@@ -1,4 +1,4 @@
-# ADR-0005: Break-glass Detection
+# ADR-0005: Every break-glass role assumption triggers an alert
 Status: Accepted
 
 Date: 2026-OCT-1

@@ -1,4 +1,4 @@
-# ADR-0006: Terraform Uses IDC SSO Session
+# ADR-0006: Terraform runs under an Identity Center SSO session
 Status: Accepted
 
 Date: 2026-OCT-1

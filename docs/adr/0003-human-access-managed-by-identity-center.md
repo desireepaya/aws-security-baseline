@@ -1,4 +1,4 @@
-# ADR-0003: Identity Foundation
+# ADR-0003: Human access is managed by Identity Center
 Status: Accepted
 
 Date: 2026-AUG-24

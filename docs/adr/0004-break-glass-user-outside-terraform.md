@@ -1,4 +1,4 @@
-# ADR-0004: Emergency Access
+# ADR-0004: Break-glass IAM user lives outside Terraform
 Status: Accepted
 
 Date: 2026-SEP-18

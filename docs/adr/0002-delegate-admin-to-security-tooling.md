@@ -1,4 +1,4 @@
-# ADR-0002: Centralized Delegated Admin in Security Tooling
+# ADR-0002: Security services administered from Security Tooling
 Status: Accepted
 
 Date: 2026-AUG-19
