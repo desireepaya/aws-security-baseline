@@ -1,6 +1,6 @@
 from diagrams import Edge
 
-GRAPH_ATTR = {"fontsize": "20", "bgcolor": "white", "pad": "0.4"}
+GRAPH_ATTR = {"fontsize": "20", "bgcolor": "white", "pad": "0.4", "splines": "polyline",}
 
 
 def data_flow(label=""):
