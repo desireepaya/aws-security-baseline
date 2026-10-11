@@ -37,7 +37,7 @@ Verify the management account can assume the admin role in the sandbox account b
 - **Expected:** AccessDeniedException with "explicit deny in a service control policy"
 - **Actual:** :white_check_mark:
   ```bash
-  User: arn:aws:sts::560628764625:assumed-role/OrganizationAccountAccessRole/botocore-session-1780083349 is not authorized to perform: cloudtrail:StopLogging on resource: arn:aws:cloudtrail:us-west-2:560628764625:trail/portfolio-org-trail with an explicit deny in a service control policy...
+  User: arn:aws:sts::<sandbox>:assumed-role/OrganizationAccountAccessRole/botocore-session-1780083349 is not authorized to perform: cloudtrail:StopLogging on resource: arn:aws:cloudtrail:us-west-2:<sandbox>:trail/portfolio-org-trail with an explicit deny in a service control policy...
   ```
 > [!TIP]
 > The SCP fired despite the target trail not existing yet.  This confirms SCPs are evaluated at authorization before resource lookup.
@@ -51,7 +51,7 @@ Verify the management account can assume the admin role in the sandbox account b
 - **Expected:** AccessDeniedException with "explicit deny in a service control policy"
 - **Actual:** :white_check_mark:
   ```bash
-  User: arn:aws:sts::560628764625:assumed-role/OrganizationAccountAccessRole/botocore-session-1780083349 is not authorized to perform: cloudtrail:CreateTrail on resource: arn:aws:cloudtrail:us-west-2:560628764625:trail/scp-test-trail with an explicit deny in a service control policy...
+  User: arn:aws:sts::<sandbox>:assumed-role/OrganizationAccountAccessRole/botocore-session-1780083349 is not authorized to perform: cloudtrail:CreateTrail on resource: arn:aws:cloudtrail:us-west-2:<sandbox>:trail/scp-test-trail with an explicit deny in a service control policy...
   ```
 > [!TIP]
 > Same principle here: I used a placeholder bucket name to satisfy the required parameters; SCP still fired ahead of validating the bucket.
@@ -68,20 +68,20 @@ Verify the management account can assume the admin role in the sandbox account b
   "trailList": [
         {
             "Name": "portfolio-org-trail",
-            "S3BucketName": "dp-cloudtrail-logs-933613018572",
+            "S3BucketName": "dp-cloudtrail-logs-<management_account>",
             "IncludeGlobalServiceEvents": true,
             "IsMultiRegionTrail": true,
             "HomeRegion": "us-west-2",
-            "TrailARN": "arn:aws:cloudtrail:us-west-2:933613018572:trail/portfolio-org-trail",
+            "TrailARN": "arn:aws:cloudtrail:us-west-2:<management_account>:trail/portfolio-org-trail",
             "LogFileValidationEnabled": true,
-            "KmsKeyId": "arn:aws:kms:us-west-2:933613018572:key/3ce9748a-ecd9-46da-9c3c-2a5eca5496fd",
+            "KmsKeyId": "arn:aws:kms:us-west-2:<management_account>:key/3ce9748a-ecd9-46da-9c3c-2a5eca5496fd",
             "HasCustomEventSelectors": false,
             "HasInsightSelectors": false,
             "IsOrganizationTrail": true
         }
     ]
 ```
-
+```
 **Test 1.4: Management account attempts to stop logging**
 - **Control:** SCP - Deny CloudTrail tampering
 - **Test action:** Management account attempts to stop logging on a non-existent trail.
@@ -113,7 +113,7 @@ Verify the management account can assume the admin role in the sandbox account b
 - **Expected:** AccessDeniedException with "explicit deny in a service control policy"
 - **Actual:** :white_check_mark:
   ```bash
-  User: arn:aws:sts::560628764625:assumed-role/OrganizationAccountAccessRole/botocore-session-1780083349 is not authorized to perform: ec2:DescribeInstances with an explicit deny in a service control policy...
+  User: arn:aws:sts::<sandbox>:assumed-role/OrganizationAccountAccessRole/botocore-session-1780083349 is not authorized to perform: ec2:DescribeInstances with an explicit deny in a service control policy...
   ```
 
 **Test 2.3: Sandbox calls IAM (global service in `NotAction` list)**
@@ -143,7 +143,7 @@ Verify the management account can assume the admin role in the sandbox account b
 - **Expected:** AccessDeniedException with "explicit deny in a service control policy"
 - **Actual:** :white_check_mark:
   ```bash
-  User: arn:aws:sts::560628764625:assumed-role/OrganizationAccountAccessRole/botocore-session-1780083349 is not authorized to perform: cloudfront:ListDistributions with an explicit deny in a service control policy...
+  User: arn:aws:sts::<sandbox>:assumed-role/OrganizationAccountAccessRole/botocore-session-1780083349 is not authorized to perform: cloudfront:ListDistributions with an explicit deny in a service control policy...
   ```
 
 ### KMS key + policy
@@ -183,7 +183,7 @@ Verify the management account can assume the admin role in the sandbox account b
 - **Expected:** Returns the policy JSON with `aws:SourceArn` rendering actual ARN instead of variable placeholder.
 - **Actual:** :white_check_mark: ARN rendered as expected.
   ```bash
-  "aws:SourceArn\" : \"arn:aws:cloudtrail:us-west-2:933613018572:trail/portfolio-org-trail\",
+  "aws:SourceArn\" : \"arn:aws:cloudtrail:us-west-2:<management_account>:trail/portfolio-org-trail\",
   ```
 
 **Test 3.4: Confirm rotation is enabled**
@@ -203,14 +203,14 @@ Verify the management account can assume the admin role in the sandbox account b
 - **Control:** S3 Encryption at Rest
 - **Test action:** Management account confirms bucket settings.
   ```bash
-  aws s3api get-bucket-encryption --bucket dp-cloudtrail-logs-933613018572 --profile portfolio
+  aws s3api get-bucket-encryption --bucket dp-cloudtrail-logs-<management_account> --profile portfolio
   ```
 - **Expected:** Returns encryption type with the correct ARN.
 - **Actual:** :white_check_mark: Confirmed SSE configuration with expected ARN
   ```bash
   "ApplyServerSideEncryptionByDefault": {
     "SSEAlgorithm": "aws:kms",
-    "KMSMasterKeyID": "arn:aws:kms:us-west-2:933613018572:key/3ce9748a-ecd9-46da-9c3c-2a5eca5496fd"
+    "KMSMasterKeyID": "arn:aws:kms:us-west-2:<management_account>:key/3ce9748a-ecd9-46da-9c3c-2a5eca5496fd"
     }
   ```
 
@@ -218,7 +218,7 @@ Verify the management account can assume the admin role in the sandbox account b
 - **Control:** S3 Block Public Access
 - **Test action:** Management account confirms Public Access Block configuration.
   ```bash
-  aws s3api get-public-access-block --bucket dp-cloudtrail-logs-933613018572 --profile portfolio
+  aws s3api get-public-access-block --bucket dp-cloudtrail-logs-<management_account> --profile portfolio
   ```
 - **Expected:** Returns `block_public_acls`, `block_public_policy`, `ignore_public_acls`, and `restrict_public_buckets` all `true`. 
 - **Actual:** :white_check_mark: All values returned `true`.
@@ -235,7 +235,7 @@ Verify the management account can assume the admin role in the sandbox account b
 - **Control:** S3 Object Ownership
 - **Test action:** Management account confirms bucket ownership enforcement.
   ```bash
-  aws s3api get-bucket-ownership-controls --bucket dp-cloudtrail-logs-933613018572 --profile portfolio
+  aws s3api get-bucket-ownership-controls --bucket dp-cloudtrail-logs-<management_account> --profile portfolio
   ```
 - **Expected:** Returns `BucketOwnerEnforced`.
 - **Actual:** :white_check_mark: Returned expected value.
@@ -251,7 +251,7 @@ Verify the management account can assume the admin role in the sandbox account b
 - **Control:** S3 Versioning
 - **Test action:** Management account confirms versioning settings.
   ```bash
-  aws s3api get-bucket-versioning --bucket dp-cloudtrail-logs-933613018572 --profile portfolio
+  aws s3api get-bucket-versioning --bucket dp-cloudtrail-logs-<management_account> --profile portfolio
   ```
 - **Expected:** Returns `Status: Enabled`.
 - **Actual:** :white_check_mark: Expected value returned.
@@ -263,7 +263,7 @@ Verify the management account can assume the admin role in the sandbox account b
 - **Control:** S3 Bucket Policy
 - **Test action:** Management account confirms policy variables rendered as expected.
   ```bash
-  aws s3api get-bucket-policy --bucket dp-cloudtrail-logs-933613018572 --profile portfolio
+  aws s3api get-bucket-policy --bucket dp-cloudtrail-logs-<management_account> --profile portfolio
   ```
 - **Expected:** Three statements (`CloudTrailGetBucketAcl`, `CloudTrailPutObject`, `DenyInsecureTransport`) with ARNs rendered.
 - **Actual:** :white_check_mark: Three statements present. All three template variables rendered correctly: bucket_arn, org_id as o-60rf2ejetx in PutObject path, trail_arn in both SourceArn conditions.
@@ -274,7 +274,7 @@ Verify the management account can assume the admin role in the sandbox account b
 - **Test action:** Management account queries for organization trail ARN, gets status.
   ```bash
   aws cloudtrail describe-trails --profile portfolio
-  aws cloudtrail get-trail-status --name arn:aws:cloudtrail:us-west-2:933613018572:trail/portfolio-org-trail --profile portfolio
+  aws cloudtrail get-trail-status --name arn:aws:cloudtrail:us-west-2:<management_account>:trail/portfolio-org-trail --profile portfolio
   ```
 - **Expected:** Returns `"IsLogging": true`
 - **Actual:** :white_check_mark: Returned `"IsLogging": true`
@@ -285,7 +285,7 @@ Verify the management account can assume the admin role in the sandbox account b
 > Allow 5-10 min after trail creation to run this test.
 - **Test action:** Management account verifies test trail written to target bucket.
   ```bash
-  aws s3api list-objects-v2 --bucket dp-cloudtrail-logs-933613018572 --prefix AWSLogs/ --profile portfolio
+  aws s3api list-objects-v2 --bucket dp-cloudtrail-logs-<management_account> --prefix AWSLogs/ --profile portfolio
   ```
 - **Expected:** Returns JSON with log objects.
 - **Actual:** :white_check_mark: Returned multiple log entries.
@@ -294,19 +294,19 @@ Verify the management account can assume the admin role in the sandbox account b
 - **Control:** S3 Enforce KMS bucket encryption
 - **Test action:** Management account verifies bucket object is encrypted with KMS key.
   ```bash
-  aws s3api head-object --bucket dp-cloudtrail-logs-933613018572 --key "AWSLogs/o-60rf2ejetx/933613018572/CloudTrail/us-west-2/2026/06/03/933613018572_CloudTrail_us-west-2_20260603T0630Z_1mzOfXjDxCUcAucm.json.gz" --profile portfolio
+  aws s3api head-object --bucket dp-cloudtrail-logs-<management_account> --key "AWSLogs/o-60rf2ejetx/<management_account>/CloudTrail/us-west-2/2026/06/03/<management_account>_CloudTrail_us-west-2_20260603T0630Z_1mzOfXjDxCUcAucm.json.gz" --profile portfolio
   ```
 - **Expected:** Returns `SSEKMSKeyId` that matches the CloudTrail KMS key ARN (...496fd).
 - **Actual:** :white_check_mark: Returned matching value:
   ```bash
-   "SSEKMSKeyId": "arn:aws:kms:us-west-2:933613018572:key/3ce9748a-ecd9-46da-9c3c-2a5eca5496fd"
+   "SSEKMSKeyId": "arn:aws:kms:us-west-2:<management_account>:key/3ce9748a-ecd9-46da-9c3c-2a5eca5496fd"
    ```
 
 **Test 5.4: Policy prevents insecure transport**
 - **Control:** S3 Deny Insecure Transport
 - **Test action:** Management account tries to write to the bucket over insecure connection.
   ```bash
-  aws s3api put-object --bucket dp-cloudtrail-logs-933613018572 --key transport-test.txt --endpoint-url http://s3.us-west-2.amazonaws.com --profile portfolio
+  aws s3api put-object --bucket dp-cloudtrail-logs-<management_account> --key transport-test.txt --endpoint-url http://s3.us-west-2.amazonaws.com --profile portfolio
   ```
 - **Expected:** `AccessDenied` from the bucket policy `DenyInsecureTransport`.
 - **Actual:** :x: Request was reject, but with `InvalidArgument` instead of `AccessDenied`.  This is likely a response from S3's service-level requirement that KMS writes use TLS.  The policy is applied but can't be verified without removing default encryption to isolate it.

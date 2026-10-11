@@ -1,7 +1,14 @@
-This document captures notes as I work through project phases, primarily unexpected gotchas and troubleshooting.  Entries are in reverse chronological order, newest first.  See [docs/adr](../docs/adr/) for architectural decisions.
+This document captures notes as I work through project tasks, primarily unexpected gotchas and troubleshooting.  Entries are in reverse chronological order, newest first.  See [docs/adr](../docs/adr/) for architectural decisions.
 
 > [!NOTE]
-> **Phase 1 Findings:** Build notes for the first phase of this project live inline in the current README, pending extraction.
+> **Phase 1 Findings:** Build notes for the first phase of this project live in [build_notes_phase1.md](/docs/build_notes_phase1.md).
+
+### 2026-OCT-10
+Task summary:
+- Creating Keel diagram in python
+
+Importing icon libraries and managing relationships in python turned out to be decidedly better than wrestling with draw.io!  After some initial experimentation, I managed to list the full inventory of what I wanted the diagram to include, and built the flows/relationships from that.  I can't easily modify the rendered diagram for icon placement, but I'm happy with the result.
+
 
 ### 2026-OCT-08
 Task summary:
@@ -204,7 +211,7 @@ Task summary:
 
 No Terraform resource exists to enable an org-level instance of Identity Center (IDC).  It's a gap in the Terraform provider, not a module gap.  It must be enabled from the console.  There is a `CreateInstance` API, but that creates an *account instance*, precisely what I don't want.
 
-I documented the one-way-door decision in the [Identity Foundation ADR](../docs/adr/0003-identity-foundation.md), so enabling this in console meant ensuring I had the region set correctly (us-west-2).  The enablement page has a big banner at the top asking you to do as much.  Below that, it offers three options:
+I documented the one-way-door decision in the [ADR-0003: Human access is managed by Identity Center](./adr/0003-human-access-managed-by-identity-center.md), so enabling this in console meant ensuring I had the region set correctly (us-west-2).  The enablement page has a big banner at the top asking you to do as much.  Below that, it offers three options:
 - Multi-region: sets us-west-2 as primary, and us-east-1 as the replication target
 - Single region: us-west-2
 - Custom region: us-west-2 as primary, choose additional region(s), but I'd need my own KMS key

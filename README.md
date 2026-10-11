@@ -1,183 +1,62 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/keel-logo-dark.svg">
+    <img src="docs/images/keel-logo-light.svg" alt="Keel" width="240">
+  </picture>
+</p>
+
 > [!NOTE]
-> **Status**: Phase 2 build in progress
+> **Status**: Phase 2 in progress: IAM baseline and Config remaining.
 
-# AWS Security Baseline & Guardrail Architecture
+Multi-account AWS Organization built in Terraform: preventative guardrails, centralized logging, and delegated detection. Controls are preventative wherever possible, detective where necessary, and deferred where they would generate noise without a remediation path.
 
-A multi-account AWS Organization implementing security guardrails: SCPs, centralized logging, and (in Phase 2) detection services with delegated administration.
+Like a ship's keel, this AWS environment was laid first to keep everything built on top of it stable. 
 
-This treats security as reliability.  Controls are preventative wherever possible, detective where necessary, and deferred where they would generate noise without a remediation path.
+![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC)
+![AWS](https://img.shields.io/badge/Platform-AWS-orange)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-## Architecture
-![Architecture](docs/images/guardrail_scope_diagram.png)
+## What this is
 
-## Scope
-### Shipped
-#### Phase 2
-- Identity Center for human access, with permission sets
-- GuardDuty with delegated admin to Security Tooling
-- IAM Access Analyzer at the org level
-- Emergency access (`break-glass`), MFA-enforced, with detection rule + alerts
-- Terraform execution migrated from an IAM user to an IDC session
+- **Multi-account environment**: The Management account runs the organization and identity; Security Tooling and Sandbox
+  sit in separate Security and Workloads OUs, with Service Control Policies enforced at the OU level
+- **Short-lived credentials as default path**: human access through IAM Identity Center; the one standing credential is MFA-gated, has no permissions at rest, and alarms on use
+- **Org-wide visibility**: CloudTrail to a KMS-encrypted, versioned S3 bucket,
+  GuardDuty delegated to the Security Tooling account, IAM Access Analyzer at
+  the org level
+- **Proven, not asserted**: controls marked "tested" have a documented test matrix, verified against expected responses
 
-#### Phase 1
-- AWS Organization with management account and two member accounts
-- One Workloads OU
-- Terraform with remote state
-- Service Control Policies applied at the OU level
-- KMS-encrypted S3 bucket for log storage
-- Organization-level CloudTrail trail
+<p align="center">
+  <a href="docs/diagrams/keel_architecture.png">
+    <img src="docs/diagrams/keel_architecture.png" alt="Keel architecture diagram" width="700">
+  </a>
+</p>
 
-#### Phase 1 governance layer
-The focus of this section was establishing a secure foundation for this environment.  With the completion of SCP, KMS, and S3 work, I now have the preventative controls in place at the organization level.
-What this enables:
-- **Region containment:** Prevents access or provisioning of resources outside of the target region.
-- **CloudTrail protection:** An SCP prevents member accounts from disabling or deleting CloudTrail, protecting the org trail once it's deployed.
-- **Storage hardened for the org trail:** KMS encryption at rest, bucket versioning, and ownership enforcement maintain log integrity once logs flow.
-- **Verified controls:** Each control was verified against its intended behavior using a documented test matrix.
+This is the current state after Phase 2.  Dashed lines represent access and trust relationships; solid lines are event and log flow.  Generated from [docs/diagrams/keel.py](/docs/diagrams/keel.py).
 
-### Phase 2
-- IAM baseline continued (permission boundaries, custom policies)
-- AWS Config with organization aggregator
+## Controls at a glance
 
-AWS Config is sequenced last deliberately because aggregation without remediation is the same reason I've deferred Security Hub (see below).  Config is the detection source for a later project.
+| Control | Type | Status |
+|---|---|---|
+| SCP region containment | Preventative | Shipped, tested |
+| SCP CloudTrail protection | Preventative | Shipped, tested |
+| Org CloudTrail to KMS-encrypted S3 | Detective (logging) | Shipped, tested |
+| GuardDuty, delegated admin | Detective | Shipped, enabled |
+| IAM Access Analyzer, org level | Detective | Shipped, enabled |
+| Identity Center, short-lived credentials for all routine access | Identity | Shipped, tested |
+| Break-glass detection to SNS | Detection engineering | Shipped, tested |
+| Centralized root access management | Preventative | Shipped, enabled |
+| AWS Config org aggregator | Detective | Next phase |
+| Security Hub | Detective | [Deferred](/docs/how_this_was_built.md#deliberately-deferred) |
 
-### Deliberately deferred
-**Security Hub** -- Aggregates findings from GuardDuty, Config, and Access Analyzer.  Aggregation has no value without a triage and remediation workflow.  Absent that workflow, Security Hub is a second dashboard producing the same findings surfaced elsewhere, at an additional cost.  Deferring to the Automated Remediation Pipeline project, where it connects detection and automated response.
+## Repo tour
 
-**WAF, Shield Advanced, Network Firewall** -- Advanced controls not justified by this portfolio's threat model.
+- Decisions: [`docs/adr`](/docs/adr/) (one ADR per decision)
+- Verification: [`docs/verification.md`](/docs/verification.md) control test matrix
+- Diagrams: [`docs/diagrams`](/docs/diagrams/) 
+- Terraform: [`terraform/`](/terraform/) bootstrap, org, and security-tooling modules
 
-## Design decisions
-**Identity Center with built-in directory**
+The build summary covers the chicken-and-egg state bootstrap, and the reasoning behind
+deferring Security Hub [`docs/how_this_was_built.md`](/docs/how_this_was_built.md).
 
-Alternatives considered: IAM users per account, Identity Center federated to an external IdP.
-
-Chose Identity Center with the built-in directory because IAM users in each account create credential sprawl that doesn't scale beyond two or three accounts.  An external IdP adds infrastructure complexity and cost that are not justified for an environment with one human user.  Identity Center centralizes human access at the org level and assigns permission sets to accounts, which is the pattern that would extend cleanly to a production environment.
-
-**DynamoDB lock table for state locking**
-
-Alternatives considered: Newer versions of Terraform support native S3-based locking with `use_lockfile`, replacing the use of DynamoDB.
-
-Chose to keep the DynamoDB pattern because it matches what production environments likely run today while demonstrating the distributed-systems reasoning behind state locking.  A future upgrade would migrate to `use_lockfile` and decommission the DynamoDB table.
-
-## How this was built
-### Phase 1
-### Environment bootstrap
-
-Before I could create any organization-level resources, Terraform needed somewhere to write state, ideally with locking to prevent concurrent runs from corrupting it.  This creates a chicken-and-egg problem: the standard pattern is remote state in S3 with a DynamoDB lock table.  With a new environment, those resources don't yet exist and Terraform won't init against a bucket it can't reach.
-
-I solved it by writing the bootstrap config with no backend block, defaulting to local state on disk.  The first apply created the S3 bucket and DynamoDB table.  I then added the backend configuration and reran `terraform init`.  Terraform detected the new backend and prompted for migration.  From that point, it manages its own state from inside the infrastructure it provisions.  Creating these resources from console would have been faster, but would have broken the IaC pattern this project depends on.
-
-One deferred decision worth mentioning: Terraform recently introduced native S3 locking with `use_lockfile`, deprecating the DynamoDB approach.  I kept DynamoDB because it matches what many production environments likely run and demonstrates the distributed-systems reasoning behind state locking.
-
-For authentication during the bootstrap phase, I created an IAM user with scoped admin permissions to the sandbox account.  Identity Center is the production pattern and was completed in Phase 2.  It required the organization management account to exist first, which is the bootstrap work of Phase 1.
-
-With state management and authentication in place, the next step creates the AWS Organization itself.
-
-### AWS Organization
-
-I decided to use an organizational unit (OU) because I wanted this project to demonstrate production patterns.  The work to attach SCPs to a single-account OU is the same as an OU with dozens of accounts, and this approach builds that muscle memory.
-
-I also created a separate sandbox account for running workloads instead of having them run in the management account.  This might seem like unnecessary overhead, but that obscures two important implementation details.  First, SCPs don't apply to the management account, so I'd need a separate account to demonstrate SCP attachment anyway.  Second, the management account is for org administration, not workloads.  Running workloads there creates a blast-radius problem, where a compromised workload would threaten org administration itself.
-
-Here is the final state after applying all changes in Terraform:
-
-![Organizations console screenshot](docs/images/organizations-console.png)
-
-### Organization-level Logging
-
-The last piece to pull all this foundational work together was implementing CloudTrail at the organization level.  This captures logs for both the admin and member accounts and is the prerequisite for implementing detective controls.  Testing the trail end-to-end was the final validation of the infrastructure and preventative controls.
-
----
-
-### Phase 2
-### Identity Center
-My intent from the beginning was to get to a centralized human access model.  As described above, I needed an admin-level IAM user to bootstrap the environment, but I didn't want to rely on long-lived credentials for this project.  The bootstrap user's console access is retired now that role assumption through IDC is verified.  Terraform runs on an SSO session and the IAM user is pending deletion.  With the bootstrap of Phase 1 done, I shifted to configuring Identity Center for human access.  
-
-My mental model was rooted in groups unlocking access for individual users.  As I refined access for each user persona, I discovered I couldn't rely solely on AWS managed policies for some use cases.  For example, the `SecurityAnalyst` persona maps to the AWS managed policy enabling investigations, `SecurityAudit`.  But if an analyst discovers an issue that requires remediation, she doesn't have permissions in that account to make changes.  She would need to escalate to a `PlatformAdmin` or I would need to add a different AWS managed policy -- `AdministratorAccess` -- to the permission set.  Ideally, I would scope this as a temporary elevation of privileges by assuming a different role, say `SecurityRemediation`, but AWS doesn't have a managed policy like that.  I chose to defer custom policies to the IAM baseline step, which simplified this initial implementation.
-
-One thing that surprised me is how permission set assignments and provisioned roles differ in this model.  Permission sets are an Identity Center artifact and are *assigned* to groups in my implementation.  That assignment scales with the number of *groups* who need access.  By contrast, roles provisioned as part of that assignment scale as the product of *accounts* and *permission sets*.  If I assigned an existing permission set to a new group, the assignments would increase but the provisioned roles would stay the same.  This underscores the benefit of group membership for human access: users can be added or removed from groups without policy changes, editing roles, or applying Terraform.  This diagram illustrates how that interaction of groups, permission sets, and accounts impacts role count:
-
-![IdentityPath](docs/images/identity_path_diagram.png)
-
-### Emergency Access
-Implementing IDC creates a reliability problem: if I lose access to IDC, I lose access to my environment.  This could happen with something as innocuous as a bad Terraform apply.  I need an IAM user whose only purpose is restoring IDC access, with permissions scoped to resolve a broad range of possible issues.  It's narrowly scoped in practice, but not in policy.  This was a [deliberate decision](docs/adr/0004-emergency-access.md) since I don't want my permissions to fail precisely when I need them.  The IAM user has no permissions at rest and must assume a role for admin access.  MFA is enforced in its trust policy, and the user was provisioned outside of Terraform so no apply can remove this recovery path.
-
-Since its usage is only for emergencies, any assumption of the `break-glass` admin role should sound an alarm.  I [created an EventBridge rule](docs/build_notes.md#2026-sep-27) keyed on the STS event so it fires on every assumption.  I added a condition to the topic policy to restrict publishing to just my rule, and created a transformer so the alert is easy to understand if a bleary-eyed me receives it at 2AM.  Now, every routine path is on short-lived credentials from a central source.  The one standing credential is MFA-gated, has no permissions of its own, and alarms on use.
-
-## Reproducing this environment
-
-### Establish credentials
-You will need an initial set of credentials to start.  Creating a new account with AWS is straight-forward.
-- Follow the setup instructions on [AWS's website](https://aws.amazon.com/).
-- Create an IAM user with admin permissions.
-- Add the IAM admin user credentials to your local AWS config.  This is your management profile.
-
-### Bootstrap local state then migrate to remote backend
-Terraform will need to write to a local state file initially.  
-- Bootstrap the environment with an S3 bucket and a DynamoDB table.
-- Once both resources exist, add a `backend` block to `providers.tf`.  See [note](terraform/bootstrap/providers.tf) for build sequence.
-- Rerun `terraform init` and it should pick up the remote backend.
-
-### Build organization resources
-These configurations are established in a separate `org/` module.
-- Create the organization, OU, SCPs, sandbox (member) account.
-- Note: the sandbox account requires a unique email address.  
-- Create a sandbox profile in your local AWS config with the new credentials.  The second profile is used during validation testing.
-
->[!WARNING]
->An AWS account doesn't fully delete on `terraform destroy`.  It's marked for deletion after a delay.  This impacts what email you used to create the account, since it can't be immediately reused.
-
-### Verification
-- Testing steps are documented in [Verification](docs/verification.md).
-- Note: when testing Insecure Transport (Test 5.4), `InvalidArgument` is an expected result.  KMS's default TLS enforcement makes it difficult to cleanly isolate a denial from the bucket policy.
-
-## Repo structure
-  ```bash
-aws-security-baseline
-├── docs
-│   ├── adr
-│   │   ├── 0001-security-tooling-account.md
-│   │   ├── 0002-centralized-delegated-admin-security-tooling.md
-│   │   ├── 0003-identity-foundation.md
-│   │   └── 0004-emergency-access.md
-│   ├── build_notes.md
-│   ├── images
-│   │   ├── guardrail_scope_diagram.png
-│   │   ├── identity_path_diagram.png
-│   │   ├── json_templates_to_terraform_resources.png
-│   │   └── organizations-console.png
-│   └── verification.md
-├── LICENSE
-├── README.md
-└── terraform
-    ├── bootstrap
-    │   ├── main.tf
-    │   ├── outputs.tf
-    │   └── providers.tf
-    ├── org
-    │   ├── break_glass_alerts.tf
-    │   ├── break_glass.tf
-    │   ├── cloudtrail.tf
-    │   ├── identity_center.tf
-    │   ├── kms.tf
-    │   ├── main.tf
-    │   ├── outputs.tf
-    │   ├── policies
-    │   │   ├── break_glass_alerts_topic_policy.json.tpl
-    │   │   ├── break_glass_assume_role_pattern.json.tpl
-    │   │   ├── break_glass_trust_policy.json.tpl
-    │   │   ├── cloudtrail_kms_key.json.tpl
-    │   │   ├── cloudtrail_s3_bucket_policy.json.tpl
-    │   │   ├── deny_cloudtrail_tampering.json
-    │   │   ├── deny_idc_account_instance_creation.json
-    │   │   └── restrict_regions.json
-    │   ├── providers.tf
-    │   ├── s3.tf
-    │   ├── scps.tf
-    │   └── variables.tf
-    └── security-tooling
-        ├── main.tf
-        ├── providers.tf
-        └── variables.tf
-```
-
+The Phase 2 build notes cover centralized administration and emergency access [`docs/build_notes.md`](docs/build_notes.md).
